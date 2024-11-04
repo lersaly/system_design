@@ -1,12 +1,58 @@
-from fastapi import FastAPI
-import uvicorn
-from users_service import router as users_router
-from talks_service import router as talks_router
+from fastapi import FastAPI, Depends, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+from models import User, Talk, Conference
+from database import get_db
+from passlib.hash import bcrypt
 
 app = FastAPI()
 
-app.include_router(users_router, prefix="/users")
-app.include_router(talks_router, prefix="/conference")
+@app.get("/")
+async def read_root():
+    return {"message": "Welcome to the conference app API!"}
 
-if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+# Создание пользователя
+@app.post("/users/")
+async def create_user(username: str, password: str, db: AsyncSession = Depends(get_db)):
+    password_hash = bcrypt.hash(password)
+    user = User(username=username, password_hash=password_hash)
+    db.add(user)
+    await db.commit()
+    return {"message": "User created successfully"}
+
+# Получение пользователя по логину
+@app.get("/users/{username}")
+async def get_user(username: str, db: AsyncSession = Depends(get_db)):
+    query = select(User).where(User.username == username)
+    result = await db.execute(query)
+    user = result.scalars().first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"id": user.id, "username": user.username}
+
+# Создание доклада
+@app.post("/talks/")
+async def create_talk(title: str, speaker_id: int, db: AsyncSession = Depends(get_db)):
+    talk = Talk(title=title, speaker_id=speaker_id)
+    db.add(talk)
+    await db.commit()
+    return {"message": "Talk created successfully"}
+
+# Получение списка всех докладов
+@app.get("/talks/")
+async def get_talks(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Talk))
+    talks = result.scalars().all()
+    return [{"id": talk.id, "title": talk.title} for talk in talks]
+
+# Добавление доклада в конференцию
+@app.post("/conferences/{conference_id}/add_talk")
+async def add_talk_to_conference(conference_id: int, talk_id: int, db: AsyncSession = Depends(get_db)):
+    conference = await db.get(Conference, conference_id)
+    talk = await db.get(Talk, talk_id)
+    if not conference or not talk:
+        raise HTTPException(status_code=404, detail="Conference or talk not found")
+    conference.talks.append(talk)
+    await db.commit()
+    return {"message": "Talk added to conference"}
+

@@ -1,40 +1,52 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel
-from auth import create_access_token, verify_token
+from utils import hash_password, verify_password
+import asyncpg
 
-router = APIRouter()
+app = FastAPI()
+
+DATABASE_URL = "postgresql://postgres:postgres@db/conference_app"
+
+async def get_db_pool():
+    return await asyncpg.create_pool(DATABASE_URL)
 
 class User(BaseModel):
     username: str
-    full_name: str
     password: str
 
-users_db = {
-    "admin": {"username": "admin", "full_name": "Administrator", "password": "secret"}
-}
+@app.post("/users/", response_model=User)
+async def create_user(user: User):
+    pool = await get_db_pool()
+    async with pool.acquire() as connection:
+        password_hash = hash_password(user.password)  # Используем хеширование пароля
+        await connection.execute('''
+            INSERT INTO users (username, password_hash) VALUES ($1, $2)
+        ''', user.username, password_hash)
+    return user
 
-@router.post("/register")
-def register_user(user: User):
-    if user.username in users_db:
-        raise HTTPException(status_code=400, detail="User already exists")
-    users_db[user.username] = {
-        "username": user.username,
-        "full_name": user.full_name,
-        "password": user.password,
-    }
-    return {"message": "User registered successfully"}
+@app.get("/users/{username}", response_model=User)
+async def read_user(username: str):
+    pool = await get_db_pool()
+    async with pool.acquire() as connection:
+        user = await connection.fetchrow('SELECT * FROM users WHERE username = $1', username)
+        if user is None:
+            raise HTTPException(status_code=404, detail="User not found")
+        return User(username=user['username'], password="")  # Не возвращаем пароль
 
-@router.post("/token")
-def login(user: User):
-    if user.username not in users_db or users_db[user.username]["password"] != user.password:
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-    
-    access_token = create_access_token(data={"sub": user.username})
-    return {"access_token": access_token, "token_type": "bearer"}
+@app.put("/users/{username}", response_model=User)
+async def update_user(username: str, user: User):
+    pool = await get_db_pool()
+    async with pool.acquire() as connection:
+        password_hash = some_hashing_function(user.password)  # Реализуйте хеширование пароля
+        await connection.execute('''
+            UPDATE users SET username = $1, password_hash = $2 WHERE username = $3
+        ''', user.username, password_hash, username)
+        return user
 
-@router.get("/users/me")
-def get_current_user(token_data: dict = Depends(verify_token)):
-    username = token_data.get("sub")
-    if username is None or username not in users_db:
-        raise HTTPException(status_code=401, detail="Invalid token")
-    return users_db[username]
+@app.delete("/users/{username}")
+async def delete_user(username: str):
+    pool = await get_db_pool()
+    async with pool.acquire() as connection:
+        await connection.execute('DELETE FROM users WHERE username = $1', username)
+        return {"detail": "User deleted"}
+
