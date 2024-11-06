@@ -1,6 +1,6 @@
 services:
   db:
-    image: postgres:latest
+    image: postgres:17
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -8,19 +8,21 @@ services:
     ports:
       - "5433:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - db_data:/var/lib/postgresql/data  # Для сохранения данных
 
   app:
     build: .
-    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
-    volumes:
-      - .:/app
-    ports:
-      - "8000:8000"
     depends_on:
       - db
+    environment:
+      DATABASE_URL: ppostgresql+asyncpg://postgres:postgres@db/conference_app  # Строка подключения к базе данных
+    ports:
+      - "8000:8000"  # Проброс порта: внешний порт 8000 будет связываться с внутренним портом 8000 вашего приложения
 
 volumes:
-  postgres_data:
+  db_data:  # Объявление тома для базы данных
+
+
+
 
 

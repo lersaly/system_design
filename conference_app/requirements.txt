@@ -3,4 +3,4 @@ uvicorn
 sqlalchemy
 sqlalchemy[asyncio]
 asyncpg
-passlib[bcrypt]  # для хэширования паролей
+passlib[bcrypt]

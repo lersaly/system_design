@@ -4,14 +4,24 @@ from sqlalchemy.future import select
 from models import User, Talk, Conference
 from database import get_db
 from passlib.hash import bcrypt
+import asyncio
+from init_db import init_db
+
 
 app = FastAPI()
+
+@app.on_event("startup")
+async def startup_event():
+    await init_db()
+
+@app.get("/")
+async def read_root():
+    return {"Hello": "World"}
 
 @app.get("/")
 async def read_root():
     return {"message": "Welcome to the conference app API!"}
 
-# Создание пользователя
 @app.post("/users/")
 async def create_user(username: str, password: str, db: AsyncSession = Depends(get_db)):
     password_hash = bcrypt.hash(password)
@@ -20,7 +30,6 @@ async def create_user(username: str, password: str, db: AsyncSession = Depends(g
     await db.commit()
     return {"message": "User created successfully"}
 
-# Получение пользователя по логину
 @app.get("/users/{username}")
 async def get_user(username: str, db: AsyncSession = Depends(get_db)):
     query = select(User).where(User.username == username)
@@ -30,7 +39,6 @@ async def get_user(username: str, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="User not found")
     return {"id": user.id, "username": user.username}
 
-# Создание доклада
 @app.post("/talks/")
 async def create_talk(title: str, speaker_id: int, db: AsyncSession = Depends(get_db)):
     talk = Talk(title=title, speaker_id=speaker_id)
@@ -38,14 +46,12 @@ async def create_talk(title: str, speaker_id: int, db: AsyncSession = Depends(ge
     await db.commit()
     return {"message": "Talk created successfully"}
 
-# Получение списка всех докладов
 @app.get("/talks/")
 async def get_talks(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Talk))
     talks = result.scalars().all()
     return [{"id": talk.id, "title": talk.title} for talk in talks]
 
-# Добавление доклада в конференцию
 @app.post("/conferences/{conference_id}/add_talk")
 async def add_talk_to_conference(conference_id: int, talk_id: int, db: AsyncSession = Depends(get_db)):
     conference = await db.get(Conference, conference_id)

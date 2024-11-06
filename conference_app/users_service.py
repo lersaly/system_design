@@ -5,7 +5,7 @@ import asyncpg
 
 app = FastAPI()
 
-DATABASE_URL = "postgresql://postgres:postgres@db/conference_app"
+DATABASE_URL = "postgresql+asyncpg://postgres:postgres@db/conference_app"
 
 async def get_db_pool():
     return await asyncpg.create_pool(DATABASE_URL)
@@ -14,14 +14,15 @@ class User(BaseModel):
     username: str
     password: str
 
+
 @app.post("/users/", response_model=User)
 async def create_user(user: User):
     pool = await get_db_pool()
     async with pool.acquire() as connection:
-        password_hash = hash_password(user.password)  # Используем хеширование пароля
+        password_hash = hash_password(user.password)
         await connection.execute('''
             INSERT INTO users (username, password_hash) VALUES ($1, $2)
-        ''', user.username, password_hash)
+        ''', user.username, password_hash) 
     return user
 
 @app.get("/users/{username}", response_model=User)
@@ -49,4 +50,3 @@ async def delete_user(username: str):
     async with pool.acquire() as connection:
         await connection.execute('DELETE FROM users WHERE username = $1', username)
         return {"detail": "User deleted"}
-
