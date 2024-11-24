@@ -3,16 +3,42 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from models import User, Talk, Conference
 from database import get_db
+from mongodb_service import MongoDBService
+from redis_service import RedisCacheService
 from passlib.hash import bcrypt
 import asyncio
 from init_db import init_db
 
-
 app = FastAPI()
+mongodb_service = MongoDBService()
+redis_cache_service = RedisCacheService()
 
 @app.on_event("startup")
 async def startup_event():
     await init_db()
+
+# Add a method to get conference with Redis caching
+@app.get("/conferences/{conference_id}")
+async def get_conference(conference_id: int, db: AsyncSession = Depends(get_db)):
+    conference = redis_cache_service.get_conference_with_cache(db, conference_id)
+    
+    if not conference:
+        raise HTTPException(status_code=404, detail="Conference not found")
+    
+    # Log conference access in MongoDB
+    mongodb_service.log_conference_activity(
+        conference_id, 
+        "accessed", 
+        {"method": "get_conference"}
+    )
+    
+    return conference
+
+# Additional methods for logging and retrieving MongoDB logs
+@app.get("/conferences/{conference_id}/logs")
+async def get_conference_logs(conference_id: int):
+    logs = mongodb_service.get_conference_logs(conference_id)
+    return logs
 
 @app.get("/")
 async def read_root():
