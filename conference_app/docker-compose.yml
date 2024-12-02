@@ -24,16 +24,33 @@ services:
     volumes:
       - redis_data:/data
 
+  zookeeper:
+    image: wurstmeister/zookeeper
+    ports:
+      - "2181:2181"
+
+  kafka:
+    image: wurstmeister/kafka
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_ADVERTISED_HOST_NAME: kafka
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+    depends_on:
+      - zookeeper
+
   app:
     build: .
     depends_on:
       - db
       - mongodb
       - redis
+      - kafka
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@db/conference_app
       MONGODB_URL: mongodb://mongodb:27017/
       REDIS_URL: redis://redis:6379/0
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
     ports:
       - "8000:8000"
 

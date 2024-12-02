@@ -77,7 +77,7 @@ async def init_db():
             (1, 1)
             ON CONFLICT (conference_id, talk_id) DO NOTHING;
         ''')
-
+        
     await pool.close()  # Закрываем пул после выполнения всех операций
 
 if __name__ == '__main__':

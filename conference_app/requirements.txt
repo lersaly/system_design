@@ -6,3 +6,4 @@ asyncpg
 passlib[bcrypt]
 pymongo==4.3.3
 redis==4.5.4
+kafka-python
